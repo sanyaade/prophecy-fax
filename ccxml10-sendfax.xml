@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ccxml version="1.0" xmlns:voxeo="http://community.voxeo.com/xmlns/ccxml"> 
+
+<!-- See http://docs.voxeo.com/prophecy/11.0/frame.jsp?page=fax.htm for more info -->
+
+<var name="num2call" expr="'sip:ccxml@172.16.99.126:5060'"/>
+<var name="callTimeout" expr="'600'"/>
+<var name="sessionTimeout" expr="'600'"/>
+<var name="call_0"/>
+
+<var name="state_0" expr="'init_0'"/>
+
+<eventprocessor statevariable="state_0">
+    <transition event="ccxml.loaded">
+        <send data="'DIE'" target="session.id" delay="String(Number(callTimeout) + 1) + 's'"/>
+        <log expr="' *** CREATE CALL TO: [' + num2call + '] *** '"/>
+        <createcall dest="num2call" connectionid="call_0" timeout="callTimeout + 's'"/>
+    </transition>
+
+    <!-- <transition event="connection.connected" name="evt"> -->
+    <transition event="connection.connected">
+        <var name="state_0" expr="'connected'"/>
+        <log expr="' *** CALL CONNECTED / START FAX DIALOG *** '"/>
+        <send data="'DIE'" target="session.id" delay="sessionTimeout + 's'"/>
+        <dialogstart src="'file://C:/Temp/faxSend/ccitt.tif'" type="'application/x-fax-send'" dialogid="faxdlgid"/>
+    </transition>
+
+    <transition event="dialog.exit">
+        <log expr="' *** DIALOG EXIT REACHED / EXIT *** '"/>
+        <log expr="'***** ' + JSON.stringify(event$) + '****' "/>
+        <exit/>
+    </transition>
+
+    <transition event="DIE" state="init_0">
+        <log expr="' *** WARNING: DIALING KILL TIMER HAS EXPIRED *** '"/>
+        <exit/>
+    </transition>
+
+    <transition event="DIE" state="connected">
+        <log expr="' *** WARNING: SESSION KILL TIMER HAS EXPIRED *** '"/>
+        <exit/>
+    </transition>
+
+    <transition event="connection.disconnected">
+        <log expr="' *** CALL DISCONNECTED / EXIT *** '"/>
+        <exit/>
+    </transition>
+
+    <transition event="connection.failed">
+        <log expr="' *** CALL FAILED / EXIT *** '"/>
+        <exit/>
+    </transition>
+
+    <transition event="error.*">
+        <log expr="' *** WARNING: AN ERROR HAS OCCURRED: (' + event.name + ') *** '"/>
+        <exit/>
+    </transition>
+</eventprocessor>
+</ccxml>

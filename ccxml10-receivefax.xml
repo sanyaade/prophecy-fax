@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+<ccxml version="1.0" xmlns:voxeo="http://community.voxeo.com/xmlns/ccxml"> 
+	<var name="state0" expr="'init'"/> 
+	<var name="faxdlgid" expr="''"/>
+        <var name="detect" expr="''"/>
+
+    <!-- See http://docs.voxeo.com/prophecy/11.0/frame.jsp?page=fax.htm for more info -->
+
+    <eventprocessor statevariable="state0"> 
+		<transition event="connection.alerting">
+            <!-- The incoming call is T.38 and _isfax == 'true' -->
+            <log expr="'***** Alerting with ****' + JSON.stringify(event$) + '****' "/>
+            <if cond="event$._isfax == 'true'">
+                <log expr="'~~~~~~~~~~~~~~~~~~~~ INCOMING FAX (T38 IN INITIAL INVITE) - ATTEMPTING TO RECEIVE ~~~~~~~~~~~~~~~'"/>
+                <dialogstart src="'file://C:/Temp/faxIncoming/faxIncoming/fax' + event$.connectionid + '.tiff?maxpages=50'" type="'application/x-fax-receive'" dialogid="faxdlgid"/>
+                <accept/>
+            <else/>
+                <accept/>
+            </if>
+        </transition> 
+		
+		<transition event="connection.connected" >
+            <!-- The incoming call is audio but sending an audio fax tone after connection. When a fax tone is detected, the application receives a connection.signal with event$.type=='fax'.  -->
+            <log expr="'~~~~~~~~~~~~~~~~~~~~ connection.connected ~~~~~~~~~~~~~~~~~~~~~~~~~~'"/>
+            <!-- Some gateways, for example, Cisco, will not INVITE to T.38 mode, so Prophecy must detect the incoming fax
+                 audio tone and reINVITE the gateway to T.38. Tone detection can consume significant system resources and is not
+                 enabled by default. Enable Prophecy's incoming faxtone detector with the connection._DetectFaxtone() function
+                 as follows: 
+                    0 - Disable faxtone detection (default)
+                    1 - Enable faxtone detection (fax tone CED or CNG) -->
+            <assign name="detect" expr="event$.connection._DetectFaxtone(1)"/>
+        </transition>
+
+        <transition event="connection.signal" >
+        <!-- The incoming call is audio and then reINVITE with T.38 after connection. The application is signalled using connection.signal to change to fax mode using event$.type == 'fax'. -->
+            <if cond="event$.type == 'fax'">
+                <log expr="'~~~~~~~~~~~~~~~~~~~~ connection.signal FAX  ~~~~~~~~~~~~~~~'"/>
+                <dialogstart src="'file://C:/Temp/faxIncoming/fax' + session.id + '.tiff?maxpages=50'" type="'application/x-fax-receive'" dialogid="faxdlgid"/>
+                <!-- paramDefs
+                     format       values=image/tiff            default=image/tiff      optional 
+                     maxpages     values=1, 2, 3, ... 0        default=0 (no limit)    optional
+
+                     <b>Note:</b> A single email destination can be given as mailto: in the src URL.  If an application needs
+                     to direct a fax to multiple email paths, it should write the fax to file and then mail the fax image
+                     after the fax call is complete.
+                paramDefs -->
+            <else/>
+                <log expr="'~~~~~~~~~~~~~~~~~~~~ connection.signal NOTfax ~~~~~~~~~~~~~~~'"/>
+            </if>
+        </transition>
+
+        <transition event="connection.disconnected" > 
+			<exit/> 
+		</transition>
+
+        <transition event="dialog.exit" >
+            <if cond="event$.dialogid == faxdlgid">
+                <if cond="event$.values.reason == 'completed'">
+					<log expr="'~~~~~~~~~~~~~~~~~~~~ INCOMING FAX - FINISHED ~~~~~~~~~~~~~~~'"/> 
+                <else/>
+                	<log expr="*** ERROR - FAX reason FAILED ***"/>
+                </if>
+				<exit/>
+            <else/>
+				<log expr="'~~~~~~~~~~~~~~~~~~~~ WHAT IS HAPPENING? ' +event$.dialogid+ ' ~~~~~~~~~~~~~~~'"/> 
+            </if>
+		</transition> 
+		
+		<transition event="error.*" > 
+			<log expr="'Houston, we have a problem: (' + event$.reason + ')'"/> 
+			<exit/> 
+		</transition>
+
+        <!-- <transition event="*.*" >
+            <log expr="'***** Wildcard event ****' + JSON.stringify(event$) + '****' "/>
+        </transition> -->
+    </eventprocessor> 
+</ccxml>
